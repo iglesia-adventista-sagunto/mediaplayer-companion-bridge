@@ -1,9 +1,11 @@
 import argparse
+import hashlib
 import json
 import os
 import shutil
 import subprocess
 import sys
+import time
 
 from wallpaper_service import POSITION_TO_CODE, WindowsDesktopWallpaperBackend
 
@@ -121,12 +123,13 @@ def _ps_escape(value: str) -> str:
 def _stop_running_bridge_processes(task_name: str = DEFAULT_TASK_NAME) -> int:
     if sys.platform != "win32":
         return 0
+    escaped_base = _ps_escape(BASE_DIR)
     ps_script = (
         f"$t = Get-ScheduledTask -TaskName '{_ps_escape(task_name)}' -ErrorAction SilentlyContinue; "
         f"if ($t) {{ Stop-ScheduledTask -TaskName '{_ps_escape(task_name)}' -ErrorAction SilentlyContinue }}; "
         "$stopped = 0; "
         "Get-CimInstance Win32_Process -Filter \"Name = 'python.exe' OR Name = 'pythonw.exe'\" -ErrorAction SilentlyContinue | "
-        "Where-Object { $_.CommandLine -like '*mediaplayer-companion-bridge*app.py*' } | "
+        f"Where-Object {{ $_.CommandLine -like '*app.py*' -and ($_.CommandLine -like '*mediaplayer-companion-bridge*' -or $_.CommandLine -like '*{escaped_base}*') }} | "
         "ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue; $stopped++ }; "
         "Write-Output $stopped"
     )
@@ -140,6 +143,59 @@ def _stop_running_bridge_processes(task_name: str = DEFAULT_TASK_NAME) -> int:
         return int((res.stdout or "0").strip().splitlines()[-1])
     except (ValueError, IndexError):
         return 0
+
+
+def _requirements_hash(req_path: str) -> str:
+    if not os.path.exists(req_path):
+        return ""
+    with open(req_path, "rb") as f:
+        return hashlib.sha256(f.read()).hexdigest()
+
+
+def ensure_venv(
+    venv_dir: str,
+    req_path: str,
+    python_exe: str | None = None,
+    print_fn=print,
+) -> str:
+    """Ensure a working machine-local venv exists with all requirements installed."""
+    venv_py = os.path.join(venv_dir, "Scripts", "python.exe")
+    base_py = python_exe or sys.executable
+    if base_py.lower().endswith("pythonw.exe"):
+        sibling_py = os.path.join(os.path.dirname(base_py), "python.exe")
+        if os.path.exists(sibling_py):
+            base_py = sibling_py
+
+    if not os.path.exists(venv_py):
+        print_fn(f"Creating machine-local virtual environment at {venv_dir}...")
+        os.makedirs(os.path.dirname(os.path.abspath(venv_dir)), exist_ok=True)
+        subprocess.run([base_py, "-m", "venv", venv_dir], check=True)
+
+    stamp_path = os.path.join(venv_dir, ".requirements.sha256")
+    expected_hash = _requirements_hash(req_path)
+    installed_hash = ""
+    if os.path.exists(stamp_path):
+        with open(stamp_path, "r", encoding="utf-8") as f:
+            installed_hash = f.read().strip()
+
+    deps_ok = False
+    if expected_hash and installed_hash == expected_hash:
+        probe = subprocess.run(
+            [venv_py, "-c", "import flask, PIL, pystray, requests"],
+            capture_output=True,
+            check=False,
+        )
+        deps_ok = probe.returncode == 0
+
+    if not deps_ok:
+        print_fn(f"Installing Python dependencies into {venv_dir}...")
+        subprocess.run([venv_py, "-m", "pip", "install", "--upgrade", "pip"], check=False)
+        subprocess.run([venv_py, "-m", "pip", "install", "-r", req_path], check=True)
+        if expected_hash:
+            with open(stamp_path, "w", encoding="utf-8") as f:
+                f.write(expected_hash)
+
+    return venv_py
 
 
 def ensure_config_exists(
@@ -189,14 +245,7 @@ def install_windows_autostart(
 
     _stop_running_bridge_processes(task_name=task_name)
 
-    venv_py = os.path.join(venv_dir, "Scripts", "python.exe")
-    if not os.path.exists(venv_py):
-        print_fn(f"Creating machine-local virtual environment at {venv_dir}...")
-        os.makedirs(os.path.dirname(venv_dir), exist_ok=True)
-        subprocess.run([sys.executable, "-m", "venv", venv_dir], check=True)
-        pip_exe = os.path.join(venv_dir, "Scripts", "pip.exe")
-        subprocess.run([venv_py, "-m", "pip", "install", "--upgrade", "pip"], check=False)
-        subprocess.run([pip_exe, "install", "-r", req_path], check=True)
+    venv_py = ensure_venv(venv_dir=venv_dir, req_path=req_path, print_fn=print_fn)
 
     pythonw_exe = os.path.join(venv_dir, "Scripts", "pythonw.exe")
     if not os.path.exists(pythonw_exe):
@@ -207,10 +256,11 @@ def install_windows_autostart(
     py_args = f'"{app_path}" --cache-dir "{cache_dir}"'
     ps_register = (
         f"$ErrorActionPreference = 'Stop'; "
+        "$UserId = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name; "
         f"$Action = New-ScheduledTaskAction -Execute '{_ps_escape(pythonw_exe)}' "
         f"-Argument '{_ps_escape(py_args)}' -WorkingDirectory '{_ps_escape(BASE_DIR)}'; "
-        "$Trigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME; "
-        "$Principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive -RunLevel Limited; "
+        "$Trigger = New-ScheduledTaskTrigger -AtLogOn -User $UserId; "
+        "$Principal = New-ScheduledTaskPrincipal -UserId $UserId -LogonType Interactive -RunLevel Limited; "
         "$Settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries "
         "-ExecutionTimeLimit ([TimeSpan]::Zero) -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1); "
         f"Register-ScheduledTask -TaskName '{_ps_escape(task_name)}' -Action $Action -Trigger $Trigger "
@@ -219,10 +269,47 @@ def install_windows_autostart(
     if start_now:
         ps_register += f"; Start-ScheduledTask -TaskName '{_ps_escape(task_name)}'"
 
-    subprocess.run(["powershell.exe", "-NoProfile", "-Command", ps_register], check=True)
+    res = subprocess.run(
+        ["powershell.exe", "-NoProfile", "-Command", ps_register],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if res.returncode != 0:
+        detail = (res.stderr or res.stdout or "").strip()
+        raise RuntimeError(f"Failed to register Windows auto-start task '{task_name}': {detail}")
+
     print_fn(f"Registered Windows auto-start task '{task_name}' (runs at logon in interactive session).")
     if start_now:
-        print_fn(f"Started '{task_name}'. Web UI: http://{ui_host}:{port}/ui")
+        running = False
+        escaped_base = _ps_escape(BASE_DIR)
+        ps_check = (
+            "Get-CimInstance Win32_Process -Filter \"Name = 'python.exe' OR Name = 'pythonw.exe'\" -ErrorAction SilentlyContinue | "
+            f"Where-Object {{ $_.CommandLine -like '*app.py*' -and ($_.CommandLine -like '*mediaplayer-companion-bridge*' -or $_.CommandLine -like '*{escaped_base}*') }} | "
+            "Measure-Object | Select-Object -ExpandProperty Count"
+        )
+        for _ in range(6):
+            time.sleep(0.4)
+            chk = subprocess.run(
+                ["powershell.exe", "-NoProfile", "-Command", ps_check],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            try:
+                if int((chk.stdout or "0").strip().splitlines()[-1]) > 0:
+                    running = True
+                    break
+            except (ValueError, IndexError):
+                pass
+        if running:
+            print_fn(f"Started '{task_name}'. Web UI: http://{ui_host}:{port}/ui")
+        else:
+            log_path = os.path.join(app_local, "logs", "bridge.log")
+            print_fn(
+                f"[WARNING] Task '{task_name}' was triggered, but no running bridge process was detected. "
+                f"Check {log_path} or Task Scheduler history."
+            )
 
 
 def uninstall_windows_autostart(task_name: str = DEFAULT_TASK_NAME, print_fn=print) -> None:
