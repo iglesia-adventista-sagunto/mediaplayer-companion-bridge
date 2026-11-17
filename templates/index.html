@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MediaPlayer Companion Bridge</title>
+  <style>
+    :root {
+      --bg: #0f1115;
+      --panel: #181c24;
+      --border: #2a3140;
+      --text: #e6ebf5;
+      --muted: #8b95a8;
+      --accent: #3b82f6;
+      --accent-hover: #2563eb;
+      --danger: #ef4444;
+      --success: #22c55e;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      padding: 20px;
+    }
+    .container { max-width: 1180px; margin: 0 auto; }
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    h1 { font-size: 1.4rem; margin: 0; }
+    .badge {
+      font-size: 0.78rem;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: #1f2937;
+      border: 1px solid var(--border);
+      color: var(--muted);
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: 1.1fr 1fr;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+    @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px;
+    }
+    .card h2 {
+      font-size: 1rem;
+      margin: 0 0 12px 0;
+      color: #cbd5e1;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .preview-box {
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      background: #000;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 10px;
+    }
+    .preview-box img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+    .meta { font-size: 0.85rem; color: var(--muted); line-height: 1.5; }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
+    input[type="text"], input[type="url"], select {
+      background: #0f131a;
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 8px 10px;
+      border-radius: 6px;
+      font-size: 0.9rem;
+      flex: 1;
+      min-width: 140px;
+    }
+    button {
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      padding: 8px 14px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 0.88rem;
+    }
+    button:hover { background: var(--accent-hover); }
+    button.secondary { background: #262e3d; }
+    button.secondary:hover { background: #333d50; }
+    button.danger { background: #7f1d1d; }
+    button.danger:hover { background: var(--danger); }
+    .stills-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 12px;
+      margin-top: 12px;
+    }
+    .still-card {
+      background: #11151d;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    .still-thumb {
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      background: #000;
+      object-fit: cover;
+      display: block;
+    }
+    .still-body { padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; }
+    .still-name {
+      font-size: 0.85rem;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .still-actions { display: flex; gap: 6px; }
+    .still-actions button { flex: 1; padding: 6px 8px; font-size: 0.8rem; }
+    .banner {
+      padding: 10px 14px;
+      border-radius: 8px;
+      margin-bottom: 14px;
+      font-size: 0.9rem;
+      display: none;
+    }
+    .banner.error { display: block; background: #3f1518; border: 1px solid #991b1b; color: #fecaca; }
+    .banner.ok { display: block; background: #123524; border: 1px solid #166534; color: #bbf7d0; }
+    code {
+      background: #0d1017;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 0.83rem;
+      color: #93c5fd;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div>
+        <h1>MediaPlayer Companion Bridge</h1>
+        <div class="meta">Extended Desktop (Blackmagic Output) Still Image Controller</div>
+      </div>
+      <span class="badge">{{ hostname }} &middot; v{{ version }}</span>
+    </header>
+
+    <div id="banner" class="banner"></div>
+
+    <div class="grid">
+      <div class="card">
+        <h2>
+          <span>Live Output Preview</span>
+          <button class="secondary" onclick="refreshStatus()">Refresh</button>
+        </h2>
+        <div class="preview-box">
+          <img id="livePreview" src="/current/image" alt="Current output" onerror="this.style.opacity=0.2" />
+        </div>
+        <div class="meta" id="liveMeta">Loading...</div>
+      </div>
+
+      <div class="card">
+        <h2>Display &amp; Quick Controls</h2>
+        <div class="row">
+          <select id="monitorSelect" onchange="changeMonitor()"></select>
+          <select id="positionSelect" onchange="changePosition()">
+            <option value="fill">Fill</option>
+            <option value="fit">Fit</option>
+            <option value="stretch">Stretch</option>
+            <option value="center">Center</option>
+            <option value="tile">Tile</option>
+            <option value="span">Span</option>
+          </select>
+          <button class="danger" onclick="clearBlack()">Black Still</button>
+        </div>
+
+        <h2 style="margin-top: 14px;">Presets</h2>
+        <div class="row" id="presetsRow"></div>
+
+        <h2 style="margin-top: 14px;">Apply from URL</h2>
+        <div class="row">
+          <input type="url" id="urlInput" placeholder="http://127.0.0.1:5001/latest" />
+          <button onclick="applyUrl()">Apply URL</button>
+        </div>
+
+        <h2 style="margin-top: 14px;">Upload Still Image</h2>
+        <form id="uploadForm" onsubmit="uploadStill(event)">
+          <div class="row">
+            <input type="file" id="fileInput" accept="image/*" required style="flex: 1; color: var(--muted);" />
+          </div>
+          <div class="row">
+            <input type="text" id="nameInput" placeholder="Optional still slot name (e.g. sermon_title)" />
+            <button type="submit">Upload &amp; Apply</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom: 16px;">
+      <h2>
+        <span>Media Pool (<code>stills/</code>)</span>
+        <span class="meta" id="stillsCount">0 stills</span>
+      </h2>
+      <div class="stills-grid" id="stillsGrid"></div>
+    </div>
+
+    <div class="card">
+      <h2>Bitfocus Companion HTTP Endpoints</h2>
+      <div class="meta">
+        <code>GET /still/&lt;name&gt;</code> &middot;
+        <code>GET /preset/&lt;name&gt;</code> &middot;
+        <code>GET /url?url=http://127.0.0.1:5001/latest</code> &middot;
+        <code>GET /clear</code> &middot;
+        <code>POST /upload</code> &middot;
+        <code>GET /current/name</code> &middot;
+        <code>GET /current/image</code> &middot;
+        <code>GET /monitors</code>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function showBanner(msg, isError = false) {
+      const el = document.getElementById('banner');
+      el.textContent = msg;
+      el.className = 'banner ' + (isError ? 'error' : 'ok');
+    }
+
+    async function api(url, opts = {}) {
+      const res = await fetch(url, opts);
+      const data = await res.json();
+      if (!res.ok || data.ok === false) {
+        throw new Error(data.error || ('HTTP ' + res.status));
+      }
+      return data;
+    }
+
+    async function refreshStatus() {
+      try {
+        const data = await api('/status');
+        const preview = document.getElementById('livePreview');
+        preview.style.opacity = 1;
+        preview.src = '/current/image?t=' + Date.now();
+
+        const mon = data.active_monitor;
+        const cur = data.current_still;
+        const monText = mon
+          ? `[${mon.index}] ${mon.width}x${mon.height} (${mon.primary ? 'Primary' : 'Extended'})`
+          : (data.monitor_error || 'None');
+        const stillText = cur ? `${cur.name} (${cur.source})` : 'Windows current wallpaper';
+        document.getElementById('liveMeta').innerHTML =
+          `<strong>Target Monitor:</strong> ${monText}<br>` +
+          `<strong>Current Still:</strong> ${stillText}<br>` +
+          `<strong>Position:</strong> ${data.position} &middot; <strong>Updates:</strong> ${data.total_updates}`;
+
+        const monSelect = document.getElementById('monitorSelect');
+        monSelect.innerHTML = '';
+        const extOpt = document.createElement('option');
+        extOpt.value = 'extended';
+        extOpt.textContent = 'Auto: Extended Monitor';
+        monSelect.appendChild(extOpt);
+        (data.monitors || []).forEach(m => {
+          const opt = document.createElement('option');
+          opt.value = String(m.index);
+          const tag = m.primary ? 'Primary' : 'Extended';
+          const act = m.active ? `${m.width}x${m.height}` : 'Inactive';
+          opt.textContent = `[${m.index}] ${tag} - ${act}`;
+          monSelect.appendChild(opt);
+        });
+        monSelect.value = String(data.target_monitor);
+
+        if (data.position) {
+          document.getElementById('positionSelect').value = data.position;
+        }
+
+        const presetsRow = document.getElementById('presetsRow');
+        presetsRow.innerHTML = '';
+        (data.presets || []).forEach(p => {
+          const btn = document.createElement('button');
+          btn.className = 'secondary';
+          btn.textContent = p.label || p.name;
+          btn.onclick = () => runAction('/preset/' + encodeURIComponent(p.name));
+          presetsRow.appendChild(btn);
+        });
+
+        const grid = document.getElementById('stillsGrid');
+        grid.innerHTML = '';
+        const stills = data.stills || [];
+        document.getElementById('stillsCount').textContent = stills.length + ' still(s)';
+        stills.forEach(s => {
+          const card = document.createElement('div');
+          card.className = 'still-card';
+          card.innerHTML = `
+            <img class="still-thumb" src="/stills/${encodeURIComponent(s.filename)}?t=${Date.now()}" alt="${s.name}" />
+            <div class="still-body">
+              <div class="still-name" title="${s.filename}">${s.name}</div>
+              <div class="still-actions">
+                <button onclick="runAction('/still/${encodeURIComponent(s.filename)}')">Apply</button>
+                <button class="danger" onclick="deleteStill('${encodeURIComponent(s.filename)}')">Del</button>
+              </div>
+            </div>`;
+          grid.appendChild(card);
+        });
+      } catch (err) {
+        showBanner('Status error: ' + err.message, true);
+      }
+    }
+
+    async function runAction(url, opts = {}) {
+      try {
+        await api(url, opts);
+        showBanner('Applied: ' + url, false);
+        await refreshStatus();
+      } catch (err) {
+        showBanner(err.message, true);
+      }
+    }
+
+    async function changeMonitor() {
+      const val = document.getElementById('monitorSelect').value;
+      await runAction('/monitor/' + encodeURIComponent(val), { method: 'POST' });
+    }
+
+    async function changePosition() {
+      const val = document.getElementById('positionSelect').value;
+      await runAction('/position/' + encodeURIComponent(val), { method: 'POST' });
+    }
+
+    async function clearBlack() {
+      await runAction('/clear', { method: 'POST' });
+    }
+
+    async function applyUrl() {
+      const url = document.getElementById('urlInput').value.trim();
+      if (!url) return showBanner('Please enter an image URL', true);
+      await runAction('/url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url })
+      });
+    }
+
+    async function uploadStill(e) {
+      e.preventDefault();
+      const file = document.getElementById('fileInput').files[0];
+      if (!file) return;
+      const fd = new FormData();
+      fd.append('file', file);
+      const name = document.getElementById('nameInput').value.trim();
+      if (name) fd.append('name', name);
+      await runAction('/upload', { method: 'POST', body: fd });
+      document.getElementById('uploadForm').reset();
+    }
+
+    async function deleteStill(encodedName) {
+      await runAction('/stills/' + encodedName, { method: 'DELETE' });
+    }
+
+    refreshStatus();
+  </script>
+</body>
+</html>

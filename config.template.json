@@ -1,0 +1,22 @@
+{
+  "port": 5002,
+  "host": "0.0.0.0",
+  "monitor": "extended",
+  "position": "fill",
+  "stills_dir": "./stills",
+  "cache_dir": "./cache",
+  "max_cache_files": 20,
+  "url_timeout_seconds": 15,
+  "presets": [
+    {
+      "name": "latest-thumbnail",
+      "label": "Latest Thumbnail",
+      "url": "http://127.0.0.1:5001/latest"
+    },
+    {
+      "name": "black",
+      "label": "Black Still",
+      "color": "#000000"
+    }
+  ]
+}
