@@ -16,15 +16,23 @@ ATEM Television Studio hardware/API has limitations when automating still image 
 
 Unlike `tuya-companion-bridge` and `thumbnail-companion-bridge` (which run in Proxmox LXC containers), **this service must run directly on the Windows machine** driving the extended display (either the **Host Machine** or the **Win11 VM**) in an **interactive logged-in user session** (Windows `IDesktopWallpaper` COM cannot access the desktop from a Session 0 background service).
 
-### Step 1: Minimal Setup Wizard (Recommended)
+### Step 1: Quick Start (Recommended)
 
-Run the interactive setup wizard to detect your connected displays and generate `config.json`:
+Double-click **`start.bat`** (or run it from a terminal) to automatically create the machine-local Python `venv`, initialize `config.json` from `config.template.json` if missing, and launch the bridge with its System Tray icon:
 
 ```bat
-.\setup.bat
+.\start.bat
 ```
 
-Or directly with Python (no third-party packages required):
+### Step 2: Interactive Setup Wizard (Optional)
+
+Run the setup wizard to detect your connected displays and customize `config.json`:
+
+```bat
+.\start.bat setup
+```
+
+Or directly with Python:
 
 ```powershell
 python setup_wizard.py
@@ -36,45 +44,39 @@ The wizard guides you through:
 - **Scaling mode** (`fill`, `fit`, `stretch`, `center`, `tile`, `span`)
 - **`thumbnail-companion-bridge` URL** for the `latest-thumbnail` preset
 - **Local stills directory** (`./stills`)
-- Optionally running `install-windows.ps1` to register auto-start and the firewall rule
+- Optionally enabling **Windows logon auto-start**
 
 Pass `--non-interactive` to write defaults from `config.template.json` without prompting.
 
-### Option A: Auto-start in background (Recommended for Host / Win11 VM)
+### Auto-start at Windows Logon (No Administrator Required)
 
-Run from PowerShell or Command Prompt (as Administrator if you want the firewall rule added automatically):
-
-```bat
-.\install-windows.bat
-```
-
-*(Uses `-ExecutionPolicy Bypass` so it works without script signing; you can also run `powershell -ExecutionPolicy Bypass -File .\install-windows.ps1`.)*
-
-This script:
-1. Creates a **machine-local** Python `venv` and `cache` under `%LOCALAPPDATA%\mediaplayer-companion-bridge` (so both the Host and Win11 VM can safely share the same `Z:\PROYECTOS\mediaplayer-companion-bridge` NAS folder without conflicting `venv` or `cache` files).
-2. Creates `config.json` from `config.template.json` if missing.
-3. Opens Windows Firewall for TCP port `5002` (or your configured `port`).
-4. Registers and starts a **Task Scheduler** task (`MediaPlayerCompanionBridge`) that runs `pythonw.exe` at user logon in the interactive desktop session.
-
-To remove the scheduled task and firewall rule later:
+To register and start a standard-user **Task Scheduler** task (`MediaPlayerCompanionBridge`) that runs `pythonw.exe` at logon in your interactive desktop session:
 
 ```bat
-.\uninstall-windows.bat
+.\start.bat install
 ```
 
-### Option B: Foreground console (Manual / Testing)
+This creates a **machine-local** Python `venv` and `cache` under `%LOCALAPPDATA%\mediaplayer-companion-bridge` (so multiple Windows machines can safely share the same NAS folder without conflicting `venv` or `cache` files) and starts the tray daemon immediately.
+
+To stop the bridge and remove the scheduled task later:
 
 ```bat
-start.bat
+.\start.bat uninstall
 ```
 
-Both `install-windows.ps1` and `start.bat` launch a **System Tray icon** (dark monitor badge with a green/amber/red status dot) so you can easily:
-- **Open Web UI** (double-click tray icon or click *Open Web UI*)
+### System Tray & Diagnostics
+
+`start.bat` (and the auto-start task) launches a **System Tray icon** (dark monitor badge with a green/amber/red status dot) so you can easily:
+- **Open Web UI** (double-click tray icon or click *Open Web UI* — opens the URL configured in `config.json`)
 - **Diagnose...** (opens a live diagnostics & log viewer window with monitor detection, URLs, errors, and rotating logs at `%LOCALAPPDATA%\mediaplayer-companion-bridge\logs\bridge.log`)
 - **Restart Service** (reloads `config.json` and restarts the HTTP server in-place)
 - **Close / Exit** (cleanly shuts down the HTTP server and tray daemon)
 
-Pass `--no-tray` (or set `NO_TRAY=1`) to run headless without a tray icon.
+Pass `--no-tray` (or set `NO_TRAY=1`) to run headless without a tray icon:
+
+```bat
+.\start.bat --no-tray
+```
 
 Open the Web UI at: `http://<host-or-vm-ip>:5002/ui`
 
@@ -150,7 +152,7 @@ Both `GET` and `POST` are supported on action endpoints for easy **Bitfocus Comp
 & "$env:LOCALAPPDATA\mediaplayer-companion-bridge\venv\Scripts\python.exe" -m unittest discover -v
 ```
 
-*(Runs `test_app.py`, `test_tray_daemon.py`, and `test_setup_wizard.py`.)*
+*(Runs all tests in `tests/`.)*
 
 ---
 

@@ -190,6 +190,18 @@ def _open_path_in_os(path: str) -> None:
         subprocess.Popen(["xdg-open", path])
 
 
+def _resolve_connect_host(host: str | None) -> str:
+    """Map wildcard bind addresses (e.g. 0.0.0.0) to 127.0.0.1 for local client connections."""
+    cleaned = (host or "").strip()
+    if not cleaned or cleaned in ("0.0.0.0", "::", "[::]"):
+        return "127.0.0.1"
+    return cleaned
+
+
+def _build_ui_url(host: str | None, port: int) -> str:
+    return f"http://{_resolve_connect_host(host)}:{port}/ui"
+
+
 def _get_local_ips() -> list[str]:
     ips = []
     try:
@@ -235,9 +247,10 @@ class BridgeServerController:
             cfg = self._config_loader()
             configure_logging(cache_dir=cfg.get("cache_dir"))
             if cfg.get("port"):
+                probe_host = _resolve_connect_host(cfg.get("host"))
                 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
                     probe.settimeout(0.3)
-                    if probe.connect_ex(("127.0.0.1", int(cfg["port"]))) == 0:
+                    if probe.connect_ex((probe_host, int(cfg["port"]))) == 0:
                         raise OSError(f"Port {cfg['port']} is already in use")
             flask_app = self._app_factory(cfg, backend=self._backend)
             server = make_server(cfg["host"], cfg["port"], flask_app, threaded=True)
@@ -317,16 +330,36 @@ class BridgeServerController:
             self._restart_count += 1
         return self.start()
 
+    def _active_or_loaded_config(self) -> dict:
+        with self._lock:
+            if self._bound_port and self._config:
+                return dict(self._config)
+            cached = dict(self._config)
+        try:
+            loaded = self._config_loader()
+            if isinstance(loaded, dict):
+                return loaded
+        except Exception:
+            pass
+        return cached
+
     @property
     def port(self) -> int:
         with self._lock:
             if self._bound_port:
                 return self._bound_port
-            return int(self._config.get("port", 5002))
+        cfg = self._active_or_loaded_config()
+        return int(cfg.get("port", 5002))
 
     @property
     def ui_url(self) -> str:
-        return f"http://127.0.0.1:{self.port}/ui"
+        with self._lock:
+            bound_port = self._bound_port
+            active_cfg = dict(self._config)
+        if bound_port:
+            return _build_ui_url(active_cfg.get("host"), bound_port)
+        cfg = self._active_or_loaded_config()
+        return _build_ui_url(cfg.get("host"), int(cfg.get("port", 5002)))
 
     @property
     def config(self) -> dict:
@@ -356,7 +389,8 @@ class BridgeServerController:
 
         if check_http and status == "running":
             try:
-                r = requests.get(f"http://127.0.0.1:{port}/health", timeout=1.5)
+                connect_host = _resolve_connect_host(cfg.get("host"))
+                r = requests.get(f"http://{connect_host}:{port}/health", timeout=1.5)
                 if not r.ok:
                     http_error = f"HTTP {r.status_code}"
             except Exception as exc:
@@ -393,7 +427,7 @@ class BridgeServerController:
             "tray_state": tray_state,
             "port": port,
             "host": cfg.get("host", "0.0.0.0"),
-            "ui_url": f"http://127.0.0.1:{port}/ui",
+            "ui_url": _build_ui_url(cfg.get("host"), port),
             "lan_urls": [f"http://{ip}:{port}/ui" for ip in _get_local_ips()],
             "started_at": started_at_iso,
             "uptime_seconds": uptime_seconds,
@@ -642,7 +676,8 @@ class TrayDaemon:
 
     def _clear_black(self, _icon=None, _item=None) -> None:
         try:
-            requests.post(f"http://127.0.0.1:{self.controller.port}/black", timeout=3.0)
+            connect_host = _resolve_connect_host(self.controller.config.get("host"))
+            requests.post(f"http://{connect_host}:{self.controller.port}/black", timeout=3.0)
         except Exception as exc:
             logger.warning("Tray clear/black failed: %s", exc)
         self._refresh_icon(force=True)

@@ -7,7 +7,7 @@ import unittest
 import requests
 
 from app import create_app
-from test_app import FakeWallpaperBackend
+from tests.test_app import FakeWallpaperBackend
 from tray_daemon import (
     BridgeServerController,
     configure_logging,
@@ -131,6 +131,32 @@ class TestBridgeServerController(unittest.TestCase):
             self.assertIsNotNone(diag["monitor_error"])
         finally:
             ctrl.stop()
+
+    def test_ui_url_uses_config_host_and_port(self):
+        def custom_loader():
+            return {
+                "port": 5099,
+                "host": "localhost",
+                "monitor": "extended",
+                "position": "fill",
+                "stills_dir": self.stills_dir,
+                "cache_dir": self.cache_dir,
+                "max_cache_files": 5,
+                "url_timeout_seconds": 5,
+                "presets": [],
+            }
+
+        ctrl = BridgeServerController(create_app, custom_loader, backend=self.backend, version="1.0.0")
+        self.assertEqual(ctrl.ui_url, "http://localhost:5099/ui")
+
+        def wildcard_loader():
+            cfg = custom_loader()
+            cfg["host"] = "0.0.0.0"
+            cfg["port"] = 5077
+            return cfg
+
+        ctrl_wildcard = BridgeServerController(create_app, wildcard_loader, backend=self.backend, version="1.0.0")
+        self.assertEqual(ctrl_wildcard.ui_url, "http://127.0.0.1:5077/ui")
 
 
 if __name__ == "__main__":
