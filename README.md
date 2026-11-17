@@ -16,6 +16,30 @@ ATEM Television Studio hardware/API has limitations when automating still image 
 
 Unlike `tuya-companion-bridge` and `thumbnail-companion-bridge` (which run in Proxmox LXC containers), **this service must run directly on the Windows machine** driving the extended display (either the **Host Machine** or the **Win11 VM**) in an **interactive logged-in user session** (Windows `IDesktopWallpaper` COM cannot access the desktop from a Session 0 background service).
 
+### Step 1: Minimal Setup Wizard (Recommended)
+
+Run the interactive setup wizard to detect your connected displays and generate `config.json`:
+
+```bat
+.\setup.bat
+```
+
+Or directly with Python (no third-party packages required):
+
+```powershell
+python setup_wizard.py
+```
+
+The wizard guides you through:
+- **HTTP port** (default `5002`)
+- **Target monitor** (auto-lists detected Windows displays, or `extended` / `primary` / index)
+- **Scaling mode** (`fill`, `fit`, `stretch`, `center`, `tile`, `span`)
+- **`thumbnail-companion-bridge` URL** for the `latest-thumbnail` preset
+- **Local stills directory** (`./stills`)
+- Optionally running `install-windows.ps1` to register auto-start and the firewall rule
+
+Pass `--non-interactive` to write defaults from `config.template.json` without prompting.
+
 ### Option A: Auto-start in background (Recommended for Host / Win11 VM)
 
 Run from PowerShell or Command Prompt (as Administrator if you want the firewall rule added automatically):
@@ -123,5 +147,13 @@ Both `GET` and `POST` are supported on action endpoints for easy **Bitfocus Comp
 ## Running Tests
 
 ```powershell
-.\venv\Scripts\python -m unittest test_app.py -v
+& "$env:LOCALAPPDATA\mediaplayer-companion-bridge\venv\Scripts\python.exe" -m unittest discover -v
 ```
+
+*(Runs `test_app.py`, `test_tray_daemon.py`, and `test_setup_wizard.py`.)*
+
+---
+
+## License
+
+This project is licensed under the **GNU General Public License v3.0 (GPL-3.0)** — see [LICENSE](LICENSE) for details.
