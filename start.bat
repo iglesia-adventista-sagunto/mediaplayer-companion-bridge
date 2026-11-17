@@ -12,29 +12,12 @@ if /i "%~1"=="--help" goto :show_help
 if /i "%~1"=="-h" goto :show_help
 if "%~1"=="/?" goto :show_help
 
-if /i "%~1"=="setup" (
-    shift
-    call :run_wizard %1 %2 %3 %4 %5 %6 %7 %8 %9
-    set "EXIT_CODE=%ERRORLEVEL%"
-    popd
-    exit /b %EXIT_CODE%
-)
-
-if /i "%~1"=="install" (
-    shift
-    call :run_wizard --install-only %1 %2 %3 %4 %5 %6 %7 %8 %9
-    set "EXIT_CODE=%ERRORLEVEL%"
-    popd
-    exit /b %EXIT_CODE%
-)
-
-if /i "%~1"=="uninstall" (
-    shift
-    call :run_wizard --uninstall %1 %2 %3 %4 %5 %6 %7 %8 %9
-    set "EXIT_CODE=%ERRORLEVEL%"
-    popd
-    exit /b %EXIT_CODE%
-)
+if /i "%~1"=="setup" goto :cmd_setup
+if /i "%~1"=="--setup" goto :cmd_setup
+if /i "%~1"=="install" goto :cmd_install
+if /i "%~1"=="--install" goto :cmd_install
+if /i "%~1"=="uninstall" goto :cmd_uninstall
+if /i "%~1"=="--uninstall" goto :cmd_uninstall
 
 call :ensure_venv
 if errorlevel 1 (
@@ -59,12 +42,33 @@ echo Usage: start.bat [command] [options]
 echo.
 echo Commands:
 echo   (none)      Create/repair venv, initialize config.json, and start the bridge
-echo   setup       Run the interactive setup wizard (pass --non-interactive, --install, etc.)
-echo   install     Install/update venv and register Windows logon auto-start task
-echo   uninstall   Stop running bridge processes and remove Windows logon auto-start task
+echo   setup       Run the interactive setup wizard (also --setup)
+echo   install     Install/update venv and register Windows logon auto-start task (also --install)
+echo   uninstall   Stop running bridge processes and remove Windows logon auto-start task (also --uninstall)
 echo   --no-tray   Start headless without the system tray icon
 popd
 exit /b 0
+
+:cmd_setup
+shift
+call :run_wizard %1 %2 %3 %4 %5 %6 %7 %8 %9
+set "EXIT_CODE=%ERRORLEVEL%"
+popd
+exit /b %EXIT_CODE%
+
+:cmd_install
+shift
+call :run_wizard --install-only %1 %2 %3 %4 %5 %6 %7 %8 %9
+set "EXIT_CODE=%ERRORLEVEL%"
+popd
+exit /b %EXIT_CODE%
+
+:cmd_uninstall
+shift
+call :run_wizard --uninstall %1 %2 %3 %4 %5 %6 %7 %8 %9
+set "EXIT_CODE=%ERRORLEVEL%"
+popd
+exit /b %EXIT_CODE%
 
 :run_wizard
 if exist "%VENV_PY%" (
