@@ -1,30 +1,53 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>MediaPlayer Companion Bridge</title>
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='mediaplayer-logo-transparent.png') }}">
   <style>
     :root {
-      --bg: #0f1115;
-      --panel: #181c24;
-      --border: #2a3140;
-      --text: #e6ebf5;
-      --muted: #8b95a8;
-      --accent: #3b82f6;
-      --accent-hover: #2563eb;
-      --danger: #ef4444;
-      --success: #22c55e;
+      color-scheme: dark;
+      --bg: #242c38;
+      --panel: #1e2531;
+      --accent: #79a9ff;
+      --accent-hover: #9cbeff;
+      --surface: #1e2531;
+      --surface-alt: #19202c;
+      --border: #2e3847;
+      --control-border: #758499;
+      --text: #edf2fa;
+      --muted: #adb9cb;
+      --primary: #79a9ff;
+      --primary-text: #141e34;
+      --primary-soft: #273752;
+      --button-gradient: linear-gradient(90deg, #346cc3, #804bd2);
+      --button-gradient-hover: linear-gradient(90deg, #3a75cf, #8a57db);
+      --button-border: #637287;
+      --success: #9be3b9;
+      --success-bg: #20382e;
+      --warning: #f5d398;
+      --warning-bg: #413428;
+      --danger: #ffbcbc;
+      --danger-bg: #442626;
+      --dialog-scrim: rgb(10 14 22 / 66%);
+      --panel-shadow: 0 19px 15px -17px #171e2b;
+      --radius: 10px;
+      --radius-control: 3px;
+      --radius-media: 5px;
     }
     * { box-sizing: border-box; }
+    [hidden], .hidden { display: none !important; }
     body {
       margin: 0;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       background: var(--bg);
       color: var(--text);
-      padding: 20px;
+      padding: clamp(12px, 4vw, 28px);
+      isolation: isolate;
+      line-height: 1.5;
     }
-    .container { max-width: 1180px; margin: 0 auto; }
+    .container { max-width: 1064px; margin: 0 auto; }
     header {
       display: flex;
       justify-content: space-between;
@@ -33,12 +56,14 @@
       gap: 12px;
       margin-bottom: 20px;
     }
-    h1 { font-size: 1.4rem; margin: 0; }
+    .brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+    .brand-logo { width: 40px; height: 40px; object-fit: contain; flex: none; }
+    h1 { font-size: 1.125rem; margin: 0; }
     .badge {
       font-size: 0.78rem;
       padding: 4px 10px;
-      border-radius: 999px;
-      background: #1f2937;
+      border-radius: 6px;
+      background: var(--primary-soft);
       border: 1px solid var(--border);
       color: var(--muted);
     }
@@ -51,14 +76,15 @@
     @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
     .card {
       background: var(--panel);
-      border: 1px solid var(--border);
+      border: 0;
       border-radius: 10px;
+      box-shadow: var(--panel-shadow);
       padding: 16px;
     }
     .card h2 {
       font-size: 1rem;
       margin: 0 0 12px 0;
-      color: #cbd5e1;
+      color: var(--text);
       display: flex;
       justify-content: space-between;
       align-items: center;
@@ -68,7 +94,7 @@
       aspect-ratio: 16 / 9;
       background: #000;
       border: 1px solid var(--border);
-      border-radius: 8px;
+      border-radius: 5px;
       overflow: hidden;
       display: flex;
       align-items: center;
@@ -83,30 +109,32 @@
     .meta { font-size: 0.85rem; color: var(--muted); line-height: 1.5; }
     .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
     input[type="text"], input[type="url"], select {
-      background: #0f131a;
-      border: 1px solid var(--border);
+      background: var(--surface-alt);
+      border: 1px solid var(--control-border);
       color: var(--text);
       padding: 8px 10px;
-      border-radius: 6px;
-      font-size: 0.9rem;
+      border-radius: 3px;
+      min-height: 44px;
+      font-size: 1rem;
       flex: 1;
       min-width: 140px;
     }
     button {
-      background: var(--accent);
+      background: var(--button-gradient);
       color: #fff;
-      border: none;
+      border: 2px solid transparent;
       padding: 8px 14px;
-      border-radius: 6px;
+      border-radius: 3px;
+      min-height: 38px;
       cursor: pointer;
       font-weight: 600;
       font-size: 0.88rem;
     }
-    button:hover { background: var(--accent-hover); }
-    button.secondary { background: #262e3d; }
-    button.secondary:hover { background: #333d50; }
-    button.danger { background: #7f1d1d; }
-    button.danger:hover { background: var(--danger); }
+    button:not(:disabled):hover { background: var(--button-gradient-hover); }
+    button.secondary { background: transparent; color: var(--muted); border-color: var(--button-border); }
+    button.secondary:not(:disabled):hover { background: var(--primary-soft); color: var(--text); }
+    button.danger { background: transparent; color: var(--danger); border-color: #805763; }
+    button.danger:not(:disabled):hover { background: var(--danger-bg); }
     .stills-grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
@@ -114,9 +142,9 @@
       margin-top: 12px;
     }
     .still-card {
-      background: #11151d;
+      background: var(--surface-alt);
       border: 1px solid var(--border);
-      border-radius: 8px;
+      border-radius: 5px;
       overflow: hidden;
       display: flex;
       flex-direction: column;
@@ -140,7 +168,7 @@
     .still-actions button { flex: 1; padding: 6px 8px; font-size: 0.8rem; }
     .banner {
       padding: 10px 14px;
-      border-radius: 8px;
+      border-radius: 5px;
       margin-bottom: 14px;
       font-size: 0.9rem;
       display: none;
@@ -154,79 +182,163 @@
       font-size: 0.83rem;
       color: #93c5fd;
     }
+    ::selection { background: var(--primary); color: var(--primary-text); }
+    :is(button, input, select, a):focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
+    button:disabled { opacity: .5; cursor: default; }
+    .header-actions, .actions { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+    .app-wallpaper { position: fixed; inset: 0; z-index: -1; width: 100%; height: 100%; object-fit: cover; filter: blur(clamp(10px, 1.6vw, 18px)) brightness(.65); transform: scale(1.08); pointer-events: none; }
+    input[type="file"] { min-width: 0; max-width: 100%; font: inherit; }
+    input::file-selector-button { background: transparent; border: 2px solid var(--button-border); color: var(--muted); border-radius: 3px; padding: 6px 10px; cursor: pointer; }
+    input::placeholder { color: var(--muted); opacity: 1; }
+    .card, .row, .row > * { min-width: 0; }
+    .meta { overflow-wrap: anywhere; }
+    dialog { width: min(740px, calc(100% - 24px)); max-height: calc(100dvh - 24px); background: var(--panel); color: var(--text); border: 0; border-radius: 10px; padding: 20px; box-shadow: var(--panel-shadow); }
+    dialog::backdrop { background: var(--dialog-scrim); }
+    .panel-dialog[open] { display: flex; flex-direction: column; gap: 14px; }
+    .card-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+    .card-header h2 { margin: 0; font-size: 1.125rem; }
+    .dialog-scroll { overflow: auto; min-height: 0; padding: 4px; }
+    .muted { color: var(--muted); font-size: .875rem; margin: 0; }
+    .btn-secondary { background: transparent; color: var(--muted); border-color: var(--button-border); }
+    button.btn-secondary:hover { background: var(--primary-soft); }
+    .tutorial-panel h2 { font-size: 1.125rem; margin: 0; }
+    .tutorial-panel p { margin: 6px 0 0; }
+    @media (max-width: 460px) { .row > input, .row > select { flex-basis: 100%; } .still-actions { flex-wrap: wrap; } }
+    @media (pointer: coarse) { button { min-height: 44px; } }
+    #tutorialDialog {
+      position: fixed;
+      inset: 16px auto auto 16px;
+      width: min(390px, calc(100% - 32px));
+      max-height: calc(100dvh - 32px);
+      margin: 0;
+      padding: 0;
+      overflow: visible;
+      background: transparent;
+      box-shadow: none;
+    }
+    #tutorialDialog::backdrop { background: transparent; }
+    .tutorial-focus {
+      position: fixed;
+      pointer-events: none;
+      border: 2px solid var(--primary);
+      border-radius: var(--radius);
+      box-shadow: 0 0 0 100vmax rgb(8 12 20 / 72%);
+    }
+    .tutorial-panel {
+      position: relative;
+      display: grid;
+      gap: 14px;
+      max-height: calc(100dvh - 32px);
+      overflow: auto;
+      padding: 20px;
+      border: 1px solid var(--control-border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      box-shadow: var(--panel-shadow);
+    }
+    .tutorial-panel .actions { justify-content: space-between; }
+    .tutorial-panel progress { width: 100%; height: 5px; accent-color: var(--primary); }
+    .wallpaper-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(160px, 100%), 1fr));
+      gap: 14px;
+    }
+    .wallpaper-choice {
+      display: grid;
+      gap: 8px;
+      padding: 8px;
+      background: var(--surface-alt);
+      border: 2px solid var(--border);
+      color: var(--text);
+      border-radius: var(--radius-media);
+      text-align: left;
+    }
+    .wallpaper-choice:not(:disabled):hover { background: var(--primary-soft); }
+    .wallpaper-choice[aria-pressed="true"] { border-color: var(--primary); }
+    .wallpaper-choice img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 3px; }
+    .wallpaper-choice span { display: flex; justify-content: space-between; gap: 8px; }
+    .wallpaper-choice [aria-hidden] { color: var(--primary); }
   </style>
 </head>
 <body>
+  <img id="appWallpaper" class="app-wallpaper" src="{{ url_for('static', filename='fondo-bloom.jpg') }}" alt="" fetchpriority="high">
   <div class="container">
     <header>
-      <div>
-        <h1>MediaPlayer Companion Bridge</h1>
-        <div class="meta">Extended Desktop (Blackmagic Output) Still Image Controller</div>
+      <div class="brand">
+        <img class="brand-logo" src="{{ url_for('static', filename='mediaplayer-logo-transparent.png') }}" width="40" height="40" alt="">
+        <div>
+          <h1>MediaPlayer Companion Bridge</h1>
+          <div class="meta">Control de imágenes para escritorio extendido y salida Blackmagic</div>
+        </div>
       </div>
-      <span class="badge">{{ hostname }} &middot; v{{ version }}</span>
+      <div class="header-actions">
+        <span class="badge">{{ hostname }} &middot; v{{ version }}</span>
+        <button id="wallpaperButton" class="secondary" type="button" onclick="document.getElementById('wallpaperDialog').showModal()">Elegir fondo</button>
+        <button id="tutorialButton" class="secondary" type="button" onclick="startTutorial()">Tutorial</button>
+      </div>
     </header>
 
-    <div id="banner" class="banner"></div>
+    <div id="banner" class="banner" role="status" aria-live="polite"></div>
 
     <div class="grid">
-      <div class="card">
+      <div class="card" id="previewCard">
         <h2>
-          <span>Live Output Preview</span>
-          <button class="secondary" onclick="refreshStatus()">Refresh</button>
+          <span>Vista previa de la salida</span>
+          <button class="secondary" onclick="refreshStatus()">Actualizar</button>
         </h2>
         <div class="preview-box">
-          <img id="livePreview" src="/current/image" alt="Current output" onerror="this.style.opacity=0.2" />
+          <img id="livePreview" src="/current/image" alt="Imagen de salida actual" onerror="this.style.opacity=0.2" />
         </div>
-        <div class="meta" id="liveMeta">Loading...</div>
+        <div class="meta" id="liveMeta">Cargando…</div>
       </div>
 
       <div class="card">
-        <h2>Display &amp; Quick Controls</h2>
+        <h2 id="controlsHeading">Pantalla y controles rápidos</h2>
         <div class="row">
-          <select id="monitorSelect" onchange="changeMonitor()"></select>
-          <select id="positionSelect" onchange="changePosition()">
-            <option value="fill">Fill</option>
-            <option value="fit">Fit</option>
-            <option value="stretch">Stretch</option>
-            <option value="center">Center</option>
-            <option value="tile">Tile</option>
-            <option value="span">Span</option>
+          <select aria-label="Monitor de salida" id="monitorSelect" onchange="changeMonitor()"></select>
+          <select aria-label="Ajuste de la imagen" id="positionSelect" onchange="changePosition()">
+            <option value="fill">Rellenar</option>
+            <option value="fit">Ajustar</option>
+            <option value="stretch">Estirar</option>
+            <option value="center">Centrar</option>
+            <option value="tile">Mosaico</option>
+            <option value="span">Extender</option>
           </select>
-          <button class="danger" onclick="clearBlack()">Black Still</button>
+          <button class="danger" onclick="clearBlack()">Pantalla negra</button>
         </div>
 
         <h2 style="margin-top: 14px;">Presets</h2>
         <div class="row" id="presetsRow"></div>
 
-        <h2 style="margin-top: 14px;">Apply from URL</h2>
+        <h2 style="margin-top: 14px;">Aplicar desde un enlace</h2>
         <div class="row">
-          <input type="url" id="urlInput" placeholder="http://127.0.0.1:5001/latest" />
-          <button onclick="applyUrl()">Apply URL</button>
+          <input type="url" aria-label="Enlace de la imagen" id="urlInput" placeholder="http://127.0.0.1:5001/latest" />
+          <button onclick="applyUrl()">Aplicar enlace</button>
         </div>
 
-        <h2 style="margin-top: 14px;">Upload Still Image</h2>
+        <h2 style="margin-top: 14px;">Subir una imagen</h2>
         <form id="uploadForm" onsubmit="uploadStill(event)">
           <div class="row">
-            <input type="file" id="fileInput" accept="image/*" required style="flex: 1; color: var(--muted);" />
+            <input type="file" aria-label="Archivo de imagen" id="fileInput" accept="image/*" required style="flex: 1; color: var(--muted);" />
           </div>
           <div class="row">
-            <input type="text" id="nameInput" placeholder="Optional still slot name (e.g. sermon_title)" />
-            <button type="submit">Upload &amp; Apply</button>
+            <input type="text" aria-label="Nombre de la imagen (opcional)" id="nameInput" placeholder="Nombre de la imagen (opcional)" />
+            <button type="submit">Subir y aplicar</button>
           </div>
         </form>
       </div>
     </div>
 
-    <div class="card" style="margin-bottom: 16px;">
+    <div class="card" id="libraryCard" style="margin-bottom: 16px;">
       <h2>
-        <span>Media Pool (<code>stills/</code>)</span>
-        <span class="meta" id="stillsCount">0 stills</span>
+        <span>Biblioteca de imágenes (<code>stills/</code>)</span>
+        <span class="meta" id="stillsCount">0 imágenes</span>
       </h2>
       <div class="stills-grid" id="stillsGrid"></div>
     </div>
 
-    <div class="card">
-      <h2>Bitfocus Companion HTTP Endpoints</h2>
+    <div class="card" id="endpointsCard">
+      <h2>Rutas HTTP para Bitfocus Companion</h2>
       <div class="meta">
         <code>GET /still/&lt;name&gt;</code> &middot;
         <code>GET /preset/&lt;name&gt;</code> &middot;
@@ -240,7 +352,55 @@
     </div>
   </div>
 
+  <dialog id="wallpaperDialog" class="panel-dialog preset-dialog" aria-labelledby="wallpaperHeading">
+    <div class="card-header">
+      <h2 id="wallpaperHeading">Fondo de la página</h2>
+      <form method="dialog"><button type="submit" class="btn-secondary btn-sm">Cerrar</button></form>
+    </div>
+    <div class="dialog-scroll">
+      <div class="wallpaper-grid">
+        {% for filename, name in [
+          ('fondo-bloom.jpg', 'Bloom'),
+          ('fondo-montana.jpg', 'Montaña'),
+          ('2115.jpg', 'Bosque'),
+          ('2124.jpg', 'Ornamentos'),
+          ('2121.jpg', 'Madera'),
+          ('2117.jpg', 'Nebulosa azul'),
+          ('2116.jpg', 'Estrellas'),
+          ('2112.jpg', 'Geometría')
+        ] %}
+        <button type="button" class="wallpaper-choice" data-wallpaper="{{ filename }}" aria-pressed="{{ 'true' if filename == 'fondo-bloom.jpg' else 'false' }}" onclick="chooseWallpaper(this)">
+          <img src="{{ url_for('static', filename=filename) }}" alt="" loading="lazy">
+          <span>{{ name }}<span aria-hidden="true" {{ 'hidden' if filename != 'fondo-bloom.jpg' else '' }}>Activo</span></span>
+        </button>
+        {% endfor %}
+      </div>
+    </div>
+    <p id="wallpaperNotice" class="muted" role="status">Elige una imagen para aplicarla al fondo de la página.</p>
+  </dialog>
+
+  <dialog id="tutorialDialog" aria-labelledby="tutorialTitle" aria-describedby="tutorialText">
+    <div id="tutorialFocus" class="tutorial-focus" aria-hidden="true"></div>
+    <div class="tutorial-panel">
+      <div class="actions">
+        <span id="tutorialStep" class="muted"></span>
+        <button type="button" class="btn-secondary btn-sm" onclick="finishTutorial()">Saltar tutorial</button>
+      </div>
+      <progress id="tutorialProgress" aria-label="Progreso del tutorial"></progress>
+      <div aria-live="polite" aria-atomic="true">
+        <h2 id="tutorialTitle"></h2>
+        <p id="tutorialText"></p>
+      </div>
+      <div class="actions">
+        <button id="tutorialBack" type="button" class="btn-secondary" onclick="moveTutorial(-1)">Anterior</button>
+        <button id="tutorialNext" type="button" onclick="moveTutorial(1)">Siguiente</button>
+      </div>
+    </div>
+  </dialog>
+
+
   <script>
+    const byId = id => document.getElementById(id);
     function showBanner(msg, isError = false) {
       const el = document.getElementById('banner');
       el.textContent = msg;
@@ -256,6 +416,13 @@
       return data;
     }
 
+    const positionLabels = { fill: "Rellenar", fit: "Ajustar", stretch: "Estirar", center: "Centrar", tile: "Mosaico", span: "Extender" };
+    function sourceLabel(source) {
+      const [kind, ...details] = String(source || "").split(":");
+      const labels = { upload: "Archivo subido", url: "Enlace", still: "Biblioteca", preset: "Preset", color: "Color", black: "Pantalla negra" };
+      return (labels[kind] || kind) + (details.length ? ": " + details.join(":") : "");
+    }
+
     async function refreshStatus() {
       try {
         const data = await api('/status');
@@ -266,25 +433,31 @@
         const mon = data.active_monitor;
         const cur = data.current_still;
         const monText = mon
-          ? `[${mon.index}] ${mon.width}x${mon.height} (${mon.primary ? 'Primary' : 'Extended'})`
-          : (data.monitor_error || 'None');
-        const stillText = cur ? `${cur.name} (${cur.source})` : 'Windows current wallpaper';
-        document.getElementById('liveMeta').innerHTML =
-          `<strong>Target Monitor:</strong> ${monText}<br>` +
-          `<strong>Current Still:</strong> ${stillText}<br>` +
-          `<strong>Position:</strong> ${data.position} &middot; <strong>Updates:</strong> ${data.total_updates}`;
+          ? `[${mon.index}] ${mon.width}x${mon.height} (${mon.primary ? 'Principal' : 'Extendida'})`
+          : (data.monitor_error || 'Ninguno');
+        const stillText = cur ? `${cur.name} (${sourceLabel(cur.source)})` : 'Fondo actual de Windows';
+        const meta = document.getElementById('liveMeta');
+        meta.replaceChildren();
+        for (const [label, value] of [
+          ["Monitor de salida", monText], ["Imagen actual", stillText],
+          ["Ajuste", positionLabels[data.position] || data.position], ["Cambios", data.total_updates],
+        ]) {
+          const strong = document.createElement("strong");
+          strong.textContent = label + ": ";
+          meta.append(strong, document.createTextNode(String(value ?? "—")), document.createElement("br"));
+        }
 
         const monSelect = document.getElementById('monitorSelect');
         monSelect.innerHTML = '';
         const extOpt = document.createElement('option');
         extOpt.value = 'extended';
-        extOpt.textContent = 'Auto: Extended Monitor';
+        extOpt.textContent = 'Automático: pantalla extendida';
         monSelect.appendChild(extOpt);
         (data.monitors || []).forEach(m => {
           const opt = document.createElement('option');
           opt.value = String(m.index);
-          const tag = m.primary ? 'Primary' : 'Extended';
-          const act = m.active ? `${m.width}x${m.height}` : 'Inactive';
+          const tag = m.primary ? 'Principal' : 'Extendida';
+          const act = m.active ? `${m.width}x${m.height}` : 'Inactiva';
           opt.textContent = `[${m.index}] ${tag} - ${act}`;
           monSelect.appendChild(opt);
         });
@@ -299,7 +472,8 @@
         (data.presets || []).forEach(p => {
           const btn = document.createElement('button');
           btn.className = 'secondary';
-          btn.textContent = p.label || p.name;
+          const labels = { "Latest Thumbnail": "Última miniatura", "Black Still": "Pantalla negra" };
+          btn.textContent = labels[p.label] || p.label || p.name;
           btn.onclick = () => runAction('/preset/' + encodeURIComponent(p.name));
           presetsRow.appendChild(btn);
         });
@@ -307,30 +481,43 @@
         const grid = document.getElementById('stillsGrid');
         grid.innerHTML = '';
         const stills = data.stills || [];
-        document.getElementById('stillsCount').textContent = stills.length + ' still(s)';
+        document.getElementById('stillsCount').textContent = stills.length + ' imágenes';
         stills.forEach(s => {
           const card = document.createElement('div');
           card.className = 'still-card';
-          card.innerHTML = `
-            <img class="still-thumb" src="/stills/${encodeURIComponent(s.filename)}?t=${Date.now()}" alt="${s.name}" />
-            <div class="still-body">
-              <div class="still-name" title="${s.filename}">${s.name}</div>
-              <div class="still-actions">
-                <button onclick="runAction('/still/${encodeURIComponent(s.filename)}')">Apply</button>
-                <button class="danger" onclick="deleteStill('${encodeURIComponent(s.filename)}')">Del</button>
-              </div>
-            </div>`;
+          const image = document.createElement("img");
+          image.className = "still-thumb";
+          image.src = "/stills/" + encodeURIComponent(s.filename) + "?t=" + Date.now();
+          image.alt = s.name;
+          const body = document.createElement("div");
+          body.className = "still-body";
+          const name = document.createElement("div");
+          name.className = "still-name";
+          name.title = s.filename;
+          name.textContent = s.name;
+          const actions = document.createElement("div");
+          actions.className = "still-actions";
+          const apply = document.createElement("button");
+          apply.textContent = "Aplicar";
+          apply.onclick = () => runAction("/still/" + encodeURIComponent(s.filename));
+          const remove = document.createElement("button");
+          remove.textContent = "Eliminar";
+          remove.className = "danger";
+          remove.onclick = () => deleteStill(encodeURIComponent(s.filename));
+          actions.append(apply, remove);
+          body.append(name, actions);
+          card.append(image, body);
           grid.appendChild(card);
         });
       } catch (err) {
-        showBanner('Status error: ' + err.message, true);
+        showBanner('No se pudo consultar el estado: ' + err.message, true);
       }
     }
 
     async function runAction(url, opts = {}) {
       try {
         await api(url, opts);
-        showBanner('Applied: ' + url, false);
+        showBanner('Cambio aplicado correctamente.', false);
         await refreshStatus();
       } catch (err) {
         showBanner(err.message, true);
@@ -353,7 +540,7 @@
 
     async function applyUrl() {
       const url = document.getElementById('urlInput').value.trim();
-      if (!url) return showBanner('Please enter an image URL', true);
+      if (!url) return showBanner('Introduce un enlace de imagen.', true);
       await runAction('/url', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -376,6 +563,134 @@
     async function deleteStill(encodedName) {
       await runAction('/stills/' + encodedName, { method: 'DELETE' });
     }
+
+    function chooseWallpaper(button, remember = true) {
+      byId("appWallpaper").src = button.querySelector("img").src;
+      for (const choice of document.querySelectorAll("[data-wallpaper]")) {
+        const selected = choice === button;
+        choice.setAttribute("aria-pressed", String(selected));
+        choice.querySelector("[aria-hidden]").hidden = !selected;
+      }
+      byId("wallpaperNotice").textContent = "Fondo aplicado: " + button.textContent.replace("Activo", "").trim() + ".";
+      if (remember) {
+        try {
+          localStorage.setItem("mediaplayer-bridge-wallpaper", button.dataset.wallpaper);
+        } catch {
+          byId("wallpaperNotice").textContent = "Fondo aplicado. El navegador no permite guardar la selección para la próxima visita.";
+        }
+      }
+    }
+
+    try {
+      const savedWallpaper = localStorage.getItem("mediaplayer-bridge-wallpaper");
+      const choice = [...document.querySelectorAll("[data-wallpaper]")].find(button => button.dataset.wallpaper === savedWallpaper);
+      if (choice) chooseWallpaper(choice, false);
+    } catch {
+      // The default wallpaper remains available when browser storage is blocked.
+    }
+
+    const tutorialSteps = [
+      { target: "#previewCard", title: "Vista previa de la salida", text: "Aquí ves la imagen del monitor de salida y sus datos: pantalla seleccionada, imagen actual, ajuste y número de cambios. Actualizar vuelve a consultar el estado." },
+      { target: "#monitorSelect", title: "Elige la pantalla de salida", text: "Selecciona el monitor que debe recibir las imágenes. Automático busca una pantalla extendida. Al cambiar este selector se cambia el destino de las próximas imágenes." },
+      { target: "#positionSelect", title: "Ajusta la imagen a la pantalla", text: "Rellenar cubre la pantalla; Ajustar conserva la imagen completa; Estirar ocupa todo el espacio. También puedes centrar, repetir en mosaico o extender entre pantallas. El ajuste se aplica al cambiarlo." },
+      { target: '[onclick="clearBlack()"]', title: "Muestra una pantalla negra", text: "Pantalla negra sustituye la imagen de salida por una imagen negra. Puedes volver a mostrar otra imagen desde un preset, un enlace o la biblioteca." },
+      { target: "#presetsRow", title: "Aplica un preset", text: "Estos botones ejecutan los presets configurados. Última miniatura recupera la imagen activa de Thumbnail Companion Bridge. Al pulsar un preset se aplica a la salida." },
+      { target: "#urlInput", title: "Aplica una imagen desde un enlace", text: "Pega un enlace directo a una imagen y pulsa Aplicar enlace. También puedes usar el enlace /latest de Thumbnail Companion Bridge para mostrar su miniatura activa." },
+      { target: "#fileInput", title: "Sube una imagen", text: "Selecciona un archivo de imagen de tu ordenador. Puedes darle un nombre en el campo de debajo. Subir y aplicar lo guarda en la biblioteca y lo muestra en la pantalla de salida." },
+      { target: "#nameInput", title: "Ponle un nombre", text: "Este nombre es opcional y permite reconocer la imagen en la biblioteca. Si lo dejas vacío, se utiliza el nombre del archivo." },
+      { target: "#libraryCard", title: "Biblioteca de imágenes", text: "Aquí aparecen las imágenes guardadas en stills/. Aplicar muestra una imagen en la salida. Eliminar borra su archivo de la biblioteca." },
+      { target: "#endpointsCard", title: "Control desde Companion", text: "Estas rutas HTTP permiten conectar botones de Bitfocus Companion o Stream Deck para mostrar imágenes, ejecutar presets, aplicar enlaces y consultar la salida." },
+      { target: "#wallpaperButton", title: "Personaliza el fondo de la página", text: "Elegir fondo abre las imágenes disponibles para esta interfaz. Tu selección se guarda en este navegador. Este fondo es la decoración de la página de control." },
+      { target: "#tutorialButton", title: "Vuelve cuando lo necesites", text: "Puedes repetir el recorrido desde Tutorial. Usa Anterior y Siguiente para moverte, Saltar tutorial para salir en cualquier momento o Escape para cerrarlo." },
+    ];
+    const tutorialDialog = byId("tutorialDialog");
+    let tutorialIndex = 0;
+    let tutorialOrigin = null;
+
+    function startTutorial() {
+      if (tutorialDialog.open) return;
+      tutorialOrigin = { scroll: window.scrollY };
+      tutorialIndex = 0;
+      tutorialDialog.showModal();
+      renderTutorial();
+    }
+
+    function renderTutorial() {
+      const step = tutorialSteps[tutorialIndex];
+      byId("tutorialStep").textContent = "Paso " + (tutorialIndex + 1) + " de " + tutorialSteps.length;
+      byId("tutorialProgress").max = tutorialSteps.length;
+      byId("tutorialProgress").value = tutorialIndex + 1;
+      byId("tutorialTitle").textContent = step.title;
+      byId("tutorialText").textContent = step.text;
+      byId("tutorialBack").disabled = tutorialIndex === 0;
+      byId("tutorialNext").textContent = tutorialIndex === tutorialSteps.length - 1 ? "Finalizar" : "Siguiente";
+      let target = document.querySelector(step.target);
+      if (step.fallback && (!target || target.hidden)) target = document.querySelector(step.fallback);
+      target.scrollIntoView({ block: "start", behavior: "instant" });
+      window.scrollBy({ top: -16 - 18, behavior: "instant" });
+      positionTutorialFocus();
+    }
+
+    function positionTutorialFocus() {
+      if (!tutorialDialog.open) return;
+      const step = tutorialSteps[tutorialIndex];
+      let target = document.querySelector(step.target);
+      if (step.fallback && (!target || target.hidden)) target = document.querySelector(step.fallback);
+      const rect = target.getBoundingClientRect();
+      const focus = byId("tutorialFocus");
+      focus.style.left = Math.max(4, rect.left - 5) + "px";
+      focus.style.top = Math.max(4, rect.top - 5) + "px";
+      focus.style.width = Math.min(innerWidth - 8, rect.width + 10) + "px";
+      focus.style.height = Math.min(innerHeight - 8, rect.height + 10) + "px";
+      const margin = 16;
+      const gap = 14;
+      const panel = tutorialDialog.getBoundingClientRect();
+      const maxLeft = Math.max(margin, innerWidth - panel.width - margin);
+      const maxTop = Math.max(margin, innerHeight - panel.height - margin);
+      const clampLeft = left => Math.max(margin, Math.min(left, maxLeft));
+      const clampTop = top => Math.max(margin, Math.min(top, maxTop));
+      const positions = [
+        { left: rect.right + gap, top: clampTop(rect.top) },
+        { left: rect.left - panel.width - gap, top: clampTop(rect.top) },
+        { left: clampLeft(rect.left), top: rect.bottom + gap },
+        { left: clampLeft(rect.left), top: rect.top - panel.height - gap },
+      ];
+      const fits = position => position.left >= margin && position.top >= margin
+        && position.left + panel.width <= innerWidth - margin
+        && position.top + panel.height <= innerHeight - margin;
+      const position = positions.find(fits) || positions.map(candidate => ({
+        left: clampLeft(candidate.left), top: clampTop(candidate.top),
+      })).sort((first, second) => overlap(first) - overlap(second))[0];
+      function overlap(candidate) {
+        const width = Math.max(0, Math.min(candidate.left + panel.width, rect.right) - Math.max(candidate.left, rect.left));
+        const height = Math.max(0, Math.min(candidate.top + panel.height, rect.bottom) - Math.max(candidate.top, rect.top));
+        return width * height;
+      }
+      tutorialDialog.style.left = position.left + "px";
+      tutorialDialog.style.top = position.top + "px";
+    }
+
+    function moveTutorial(direction) {
+      if (tutorialIndex + direction === tutorialSteps.length) {
+        finishTutorial();
+        return;
+      }
+      tutorialIndex = Math.max(0, tutorialIndex + direction);
+      renderTutorial();
+    }
+
+    function finishTutorial() {
+      tutorialDialog.close();
+    }
+
+    tutorialDialog.addEventListener("close", () => {
+      if (tutorialDialog.open || !tutorialOrigin) return;
+      window.scrollTo({ top: tutorialOrigin.scroll, behavior: "instant" });
+      byId("tutorialButton").focus({ preventScroll: true });
+      tutorialOrigin = null;
+    });
+    window.addEventListener("resize", positionTutorialFocus);
+    window.addEventListener("scroll", positionTutorialFocus, { passive: true });
 
     refreshStatus();
   </script>
