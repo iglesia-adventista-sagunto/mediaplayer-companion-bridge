@@ -6,9 +6,12 @@ import logging
 import os
 import re
 import socket
+import ssl
 import sys
 import threading
 import time
+import urllib.error
+import urllib.request
 from datetime import datetime, timezone
 
 import requests
@@ -174,6 +177,22 @@ def _find_still_file(stills_dir: str, name: str) -> str | None:
     return None
 
 
+def _fetch_url_bytes(url: str, timeout: int) -> bytes:
+    """Fetch URL bytes via requests, falling back to OS trust store on SSLError."""
+    clean_url = url.strip()
+    try:
+        resp = requests.get(clean_url, timeout=timeout)
+        resp.raise_for_status()
+        return resp.content
+    except requests.exceptions.SSLError:
+        req = urllib.request.Request(clean_url, headers={"User-Agent": "MediaPlayerCompanionBridge/1.0"})
+        try:
+            with urllib.request.urlopen(req, timeout=timeout, context=ssl.create_default_context()) as resp:
+                return resp.read()
+        except (urllib.error.URLError, ssl.SSLError, OSError) as exc:
+            raise requests.exceptions.SSLError(str(exc)) from exc
+
+
 def create_app(config: dict | None = None, backend=None) -> Flask:
     cfg = config if config is not None else load_config()
     os.makedirs(cfg["stills_dir"], exist_ok=True)
@@ -182,7 +201,11 @@ def create_app(config: dict | None = None, backend=None) -> Flask:
     if backend is None:
         backend = WindowsDesktopWallpaperBackend()
 
-    app = Flask(__name__, template_folder=os.path.join(BASE_DIR, "templates"))
+    app = Flask(
+        __name__,
+        template_folder=os.path.join(BASE_DIR, "templates"),
+        static_folder=os.path.join(BASE_DIR, "static"),
+    )
     app.config["BRIDGE_CONFIG"] = cfg
     app.config["WALLPAPER_BACKEND"] = backend
 
@@ -261,9 +284,8 @@ def create_app(config: dict | None = None, backend=None) -> Flask:
     def _apply_from_url(url: str, label: str | None = None, monitor_override=None, position_override=None) -> dict:
         if not url or not str(url).strip().lower().startswith(("http://", "https://")):
             raise ValueError("A valid http:// or https:// URL is required")
-        resp = requests.get(url.strip(), timeout=cfg["url_timeout_seconds"])
-        resp.raise_for_status()
-        png_bytes = _prepare_png_bytes(resp.content)
+        raw_bytes = _fetch_url_bytes(url, cfg["url_timeout_seconds"])
+        png_bytes = _prepare_png_bytes(raw_bytes)
         cached_path = _write_cache_png(png_bytes, label or "url")
         return _apply_wallpaper_file(
             cached_path,

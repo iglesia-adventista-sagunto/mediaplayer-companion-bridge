@@ -81,18 +81,18 @@ if errorlevel 1 exit /b 1
 exit /b %ERRORLEVEL%
 
 :ensure_venv
-if not exist "%VENV_PY%" (
-    call :find_python
-    if errorlevel 1 exit /b 1
-    echo Creating machine-local virtual environment at "%VENV_DIR%"...
-    if not exist "%APP_LOCAL%" mkdir "%APP_LOCAL%"
-    "%SYS_PY%" -m venv "%VENV_DIR%"
-    if errorlevel 1 (
-        echo [ERROR] Failed to create virtual environment at "%VENV_DIR%".
-        exit /b 1
-    )
+if exist "%VENV_PY%" goto :ensure_deps
+call :find_python
+if errorlevel 1 exit /b 1
+echo Creating machine-local virtual environment at "%VENV_DIR%"...
+if not exist "%APP_LOCAL%" mkdir "%APP_LOCAL%"
+"%SYS_PY%" -m venv "%VENV_DIR%"
+if errorlevel 1 (
+    echo [ERROR] Failed to create virtual environment at "%VENV_DIR%".
+    exit /b 1
 )
 
+:ensure_deps
 "%VENV_PY%" -c "import flask, PIL, pystray, requests" >nul 2>&1
 if errorlevel 1 (
     echo Installing Python dependencies into "%VENV_DIR%"...

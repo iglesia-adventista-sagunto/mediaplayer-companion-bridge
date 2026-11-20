@@ -80,7 +80,17 @@ Pass `--no-tray` (or set `NO_TRAY=1`) to run headless without a tray icon:
 
 Open the Web UI at: `http://<host-or-vm-ip>:5002/ui`
 
-> **Tip (Multi-Machine / LXC Integration):** In `config.json`, update the `latest-thumbnail` preset `url` from `127.0.0.1:5001` to the IP/hostname of your `thumbnail-companion-bridge` LXC container (e.g. `http://192.168.1.50:5001/latest`). You can also override `CONFIG_PATH` or `PORT` per machine via environment variables if both the Host and Win11 VM run simultaneously.
+> **Tip (Multi-Machine / LXC Integration):** In `config.json`, update the `latest-thumbnail` preset `url` from `127.0.0.1:5001` to the IP/hostname of your `thumbnail-companion-bridge` LXC container (e.g. `http://192.168.1.50:5001/latest` or `https://thumbnails.iglesia.sagunto/latest`). HTTPS URLs using internal/enterprise CAs installed in the Windows certificate store are automatically verified via the OS trust store fallback. You can also override `CONFIG_PATH` or `PORT` per machine via environment variables if both the Host and Win11 VM run simultaneously.
+
+---
+
+## Web UI Features
+
+The operator Web UI (`/` or `/ui`) includes:
+- **EN / ES Language Toggle**: Switch between English and Spanish at any time; preference is saved in `localStorage` (defaulting to browser language).
+- **Interactive Guided Tutorial**: 12-step spotlight walkthrough explaining live preview, monitor selection, scaling modes, presets, URL/file uploads, media pool, and Companion endpoints.
+- **Customizable Page Wallpaper**: Choose from built-in background themes in `static/` (saved in `localStorage`).
+- **Safe Media Pool Management**: Confirmation dialog before deleting stills from `stills/`, in-flight action locking, and automatic background status sync when external Companion triggers change the output.
 
 ---
 

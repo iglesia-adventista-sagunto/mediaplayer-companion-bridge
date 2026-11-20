@@ -226,6 +226,36 @@ class TestMediaPlayerBridgeAPI(unittest.TestCase):
         self.assertEqual(res_mon.status_code, 200)
         self.assertEqual(res_mon.get_json()["monitor"]["index"], 1)
 
+    def test_ui_index_and_static_assets(self):
+        res = self.client.get("/")
+        self.assertEqual(res.status_code, 200)
+        html = res.data.decode("utf-8")
+        self.assertIn('id="langButton"', html)
+        self.assertIn('id="confirmDialog"', html)
+        self.assertIn('id="wallpaperDialog"', html)
+        self.assertIn('id="tutorialDialog"', html)
+        self.assertIn("/static/fondo-bloom.jpg", html)
+
+        for asset in ("mediaplayer-logo-transparent.png", "fondo-bloom.jpg"):
+            asset_res = self.client.get(f"/static/{asset}")
+            self.assertEqual(asset_res.status_code, 200, f"Missing static asset: {asset}")
+            asset_res.close()
+
+    @patch("app.urllib.request.urlopen")
+    @patch("app.requests.get")
+    def test_url_ssl_error_falls_back_to_os_trust_store(self, mock_get, mock_urlopen):
+        import requests as req_lib
+
+        mock_get.side_effect = req_lib.exceptions.SSLError("unable to get local issuer certificate")
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = _make_png_bytes((40, 50, 60))
+        mock_urlopen.return_value.__enter__.return_value = mock_resp
+
+        res = self.client.post("/url", json={"url": "https://thumbnails.iglesia.sagunto/latest"})
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.get_json()["applied"]["source"], "url:https://thumbnails.iglesia.sagunto/latest")
+        mock_urlopen.assert_called_once()
+
 
 if __name__ == "__main__":
     unittest.main()
